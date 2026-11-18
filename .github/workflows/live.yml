@@ -1,0 +1,24 @@
+name: Live site check
+
+# デジタル庁デザインシステムのサイト構造が変わっていないかを週 1 回確かめる。
+# 取得したデータはランナー上の一時ディレクトリにだけ置き、リポジトリには残さない。
+on:
+  schedule:
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test:live
