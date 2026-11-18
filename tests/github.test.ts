@@ -1,22 +1,8 @@
-import { cpSync, mkdtempSync } from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import * as tar from "tar";
 import { expect, test } from "vitest";
 import type { Http } from "../src/http.js";
 import { HttpError } from "../src/http.js";
-import { extractComponents, fetchRepo, githubFileUrl, REPOS, tarballUrl } from "../src/repos/github.js";
-import type { RepoKind } from "../src/types.js";
-
-export async function makeRepoTarball(kind: RepoKind): Promise<Buffer> {
-  const dir = mkdtempSync(path.join(os.tmpdir(), "dads-tgz-"));
-  const root = `${REPOS[kind]}-main`;
-  cpSync(new URL(`./fixtures/repos/${kind}`, import.meta.url), path.join(dir, root, "src", "components"), { recursive: true });
-  const chunks: Buffer[] = [];
-  const stream = tar.c({ gzip: true, cwd: dir }, [root]);
-  for await (const c of stream as AsyncIterable<Buffer>) chunks.push(c);
-  return Buffer.concat(chunks);
-}
+import { extractComponents, fetchRepo, githubFileUrl, tarballUrl } from "../src/repos/github.js";
+import { makeRepoTarball } from "./helpers.js";
 
 const paths = (files: { path: string }[]) => files.map((f) => f.path).sort();
 

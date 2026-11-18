@@ -1,0 +1,16 @@
+/**
+ * Test fixture (values are fictional)
+ */
+
+:root {
+  --color-primitive-blue-50: #e8f1fe;
+  --color-neutral-white: #ffffff;
+  --color-semantic-error-1: #ec0000;
+  --font-family-sans: 'Noto Sans JP', sans-serif;
+  --font-size-16: 1rem;
+  --font-weight-400: 400;
+  --line-height-150: 1.5;
+  --border-radius-8: 0.5rem;
+  --border-radius-full: 9999px;
+  --elevation-1: 0 2px 8px 1px rgba(0,0,0,0.1);
+}
