@@ -119,3 +119,14 @@ test("swapIn succeeds even if removing the old snapshot fails", async () => {
   await expect(swapIn(cacheDir, staging, "y", { rename, rm: async () => { throw new Error("EBUSY"); } })).resolves.toBeUndefined();
   expect(readFileSync(path.join(cacheDir, CURRENT, "marker"), "utf8")).toBe("new");
 });
+
+test("abort message includes the first failure reasons", async () => {
+  const cacheDir = tmp();
+  const http = await makeFakeHttp((url) =>
+    /\/dads\/(components|foundations|guidance)\//.test(url) ? Promise.resolve("<html><head><title>X</title></head><body></body></html>") : undefined,
+  );
+  const err = (await runUpdate({ cacheDir, http }).catch((e) => e)) as Error;
+  expect(err).toBeInstanceOf(UpdateAbortedError);
+  expect(err.message).toContain("本文（<main>）が見つかりません");
+  expect(err.message).toContain("https://design.digital.go.jp/dads/components/test-button/");
+});

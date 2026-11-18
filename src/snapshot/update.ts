@@ -165,7 +165,8 @@ export async function runUpdate(deps: UpdateDeps): Promise<Manifest> {
     const pages = results.filter((p): p is PageDoc => p !== undefined);
     const failed = urls.length - pages.length;
     if (failed / urls.length >= FAILURE_RATIO) {
-      throw new UpdateAbortedError(`ページの取得に ${failed}/${urls.length} 件失敗したため中止しました`);
+      const examples = warnings.slice(0, 3).map((w) => `\n  - ${w}`).join("");
+      throw new UpdateAbortedError(`ページの取得に ${failed}/${urls.length} 件失敗したため中止しました。例:${examples}`);
     }
 
     let html: RepoSnapshot, react: RepoSnapshot, tokens;
