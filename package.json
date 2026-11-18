@@ -16,7 +16,7 @@
   "author": "darthrommy",
   "repository": "github:darthrommy/dads-mcp",
   "engines": {
-    "node": ">=20.12"
+    "node": ">=22"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -34,9 +34,9 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/node": "^20.19.43",
+    "@types/node": "^22.20.5",
     "@types/turndown": "^5.0.6",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.12"
+    "vitest": "^5.1.0"
   }
 }

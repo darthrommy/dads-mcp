@@ -73,7 +73,7 @@ GitHub 由来のものは `出典: digital-go-jp/<repo>（MIT License）<ファ�
 
 ### 動作環境
 
-- Node.js 20 以上（開発環境は Node 26）
+- Node.js 22 以上（2026-11-18 時点でサポート中の LTS である 22・24・26。Node 20 は 2026-04-30 にサポート終了。開発環境は Node 26）
 - macOS / Linux / Windows
 
 ## 4. データソース（2026-11-18 時点の実測）

@@ -22,7 +22,7 @@ An unofficial MCP server for the [Digital Agency Design System (DADS)](https://d
 
 ## 使い方
 
-Node.js 20.12 以上が必要です。
+Node.js 22 以上が必要です。
 
 Claude Code:
 
