@@ -1,0 +1,42 @@
+{
+  "name": "dads-mcp",
+  "version": "0.1.0",
+  "description": "Unofficial MCP server for the Digital Agency Design System (DADS) of Japan",
+  "type": "module",
+  "bin": {
+    "dads-mcp": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "data",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "author": "darthrommy",
+  "repository": "github:darthrommy/dads-mcp",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepare": "npm run build",
+    "test": "vitest run",
+    "test:live": "vitest run --config vitest.live.config.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "cheerio": "^1.2.0",
+    "tar": "^7.5.23",
+    "turndown": "^7.2.5",
+    "turndown-plugin-gfm": "^1.0.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "@types/turndown": "^5.0.6",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.12"
+  }
+}
