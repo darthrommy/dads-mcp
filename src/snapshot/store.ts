@@ -58,6 +58,7 @@ export class SnapshotStore {
     let manifest: Manifest;
     try {
       manifest = JSON.parse(await read(FILES.manifest)) as Manifest;
+      if (typeof manifest !== "object" || manifest === null) throw new Error("manifest.json がオブジェクトではありません");
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code === "ENOENT") return null;
       console.error(`[dads-mcp] スナップショットの manifest を読めません: ${(e as Error).message}`);

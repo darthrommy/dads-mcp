@@ -41,3 +41,12 @@ test("treats mismatched schema or corrupt cache as absent", async () => {
   expect(err).toHaveBeenCalled();
   err.mockRestore();
 });
+
+test("treats non-object manifest as absent", async () => {
+  const err = vi.spyOn(console, "error").mockImplementation(() => {});
+  const a = tmp();
+  await writeFixtureSnapshot(a);
+  writeFileSync(path.join(a, CURRENT, FILES.manifest), "null");
+  expect(await SnapshotStore.open(a)).toBeNull();
+  err.mockRestore();
+});

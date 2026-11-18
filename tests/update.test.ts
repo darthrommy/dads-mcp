@@ -1,10 +1,11 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { expect, test } from "vitest";
 import { HttpError } from "../src/http.js";
 import { CURRENT, pageFile, parsePage, serializePage } from "../src/snapshot/layout.js";
-import { runUpdate, UpdateAbortedError, UpdateInProgressError } from "../src/snapshot/update.js";
+import { runUpdate, swapIn, UpdateAbortedError, UpdateInProgressError } from "../src/snapshot/update.js";
 import { makeFakeHttp } from "./helpers.js";
 
 const tmp = () => mkdtempSync(path.join(os.tmpdir(), "dads-cache-"));
@@ -71,4 +72,50 @@ test("serializePage/parsePage round trip", () => {
     resourceLinks: {},
   };
   expect(parsePage(serializePage(doc, "2026-11-18T00:00:00.000Z"), "components/x")).toEqual(doc);
+});
+
+test("site redesign without main aborts and keeps snapshot", async () => {
+  const cacheDir = tmp();
+  await runUpdate({ cacheDir, http: await makeFakeHttp(), now: () => new Date("2026-11-01T00:00:00Z") });
+  const redesigned = await makeFakeHttp((url) =>
+    /\/dads\/(components|foundations|guidance)\//.test(url) ? Promise.resolve("<html><head><title>X</title></head><body><div id=app></div></body></html>") : undefined,
+  );
+  await expect(runUpdate({ cacheDir, http: redesigned })).rejects.toBeInstanceOf(UpdateAbortedError);
+  expect(manifestOf(cacheDir).fetchedAt).toBe("2026-11-01T00:00:00.000Z");
+});
+
+test("removes lock left by a dead process", async () => {
+  const cacheDir = tmp();
+  const deadPid = spawnSync(process.execPath, ["-e", ""]).pid;
+  writeFileSync(path.join(cacheDir, "update.lock"), String(deadPid));
+  await expect(runUpdate({ cacheDir, http: await makeFakeHttp() })).resolves.toMatchObject({ schemaVersion: 1 });
+  expect(existsSync(path.join(cacheDir, "update.lock"))).toBe(false);
+});
+
+test("swapIn restores current when the second rename fails", async () => {
+  const cacheDir = tmp();
+  mkdirSync(path.join(cacheDir, CURRENT));
+  writeFileSync(path.join(cacheDir, CURRENT, "marker"), "old");
+  const staging = path.join(cacheDir, "staging-x");
+  mkdirSync(staging);
+  const { rename, rm } = await import("node:fs/promises");
+  let calls = 0;
+  const failing = async (a: string, b: string) => {
+    calls++;
+    if (calls === 2) throw Object.assign(new Error("EPERM"), { code: "EPERM" });
+    return rename(a, b);
+  };
+  await expect(swapIn(cacheDir, staging, "x", { rename: failing, rm })).rejects.toThrow("EPERM");
+  expect(readFileSync(path.join(cacheDir, CURRENT, "marker"), "utf8")).toBe("old");
+});
+
+test("swapIn succeeds even if removing the old snapshot fails", async () => {
+  const cacheDir = tmp();
+  mkdirSync(path.join(cacheDir, CURRENT));
+  const staging = path.join(cacheDir, "staging-y");
+  mkdirSync(staging);
+  writeFileSync(path.join(staging, "marker"), "new");
+  const { rename } = await import("node:fs/promises");
+  await expect(swapIn(cacheDir, staging, "y", { rename, rm: async () => { throw new Error("EBUSY"); } })).resolves.toBeUndefined();
+  expect(readFileSync(path.join(cacheDir, CURRENT, "marker"), "utf8")).toBe("new");
 });

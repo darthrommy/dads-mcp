@@ -7,16 +7,20 @@ import { SnapshotStore } from "./snapshot/store.js";
 import * as h from "./tools/handlers.js";
 import { UPDATE_COMMAND, VERSION } from "./version.js";
 
-export const FIRST_FETCH_WAIT_MS = 60_000;
+export const FIRST_FETCH_WAIT_MS = 50_000;
 export const PENDING_MESSAGE = `初回データ取得中。しばらくしてから再実行するか、\`${UPDATE_COMMAND}\` を実行してください`;
 
-type Provider = () => Promise<SnapshotStore | "pending">;
+export type StoreResult = SnapshotStore | "pending" | { error: string };
+type Provider = () => Promise<StoreResult>;
+
+export const failureMessage = (reason: string) =>
+  `データ取得に失敗しました: ${reason}\nネットワークを確認して、もう一度試すか \`${UPDATE_COMMAND}\` を実行してください`;
 
 export function createStoreProvider(cacheDir: string, update: () => Promise<unknown>, waitMs = FIRST_FETCH_WAIT_MS): Provider {
   const manifestPath = path.join(cacheDir, CURRENT, FILES.manifest);
   let cached: SnapshotStore | null = null;
   let cachedMtime = 0;
-  let inflight: Promise<void> | null = null;
+  let inflight: Promise<string | undefined> | null = null;
 
   const mtime = async () => {
     try {
@@ -44,7 +48,11 @@ export function createStoreProvider(cacheDir: string, update: () => Promise<unkn
       inflight = update()
         .then(
           () => undefined,
-          (e: unknown) => console.error(`[dads-mcp] データ取得に失敗しました: ${e instanceof Error ? e.message : String(e)}`),
+          (e: unknown) => {
+            const reason = e instanceof Error ? e.message : String(e);
+            console.error(`[dads-mcp] データ取得に失敗しました: ${reason}`);
+            return reason;
+          },
         )
         .finally(() => {
           inflight = null;
@@ -52,16 +60,19 @@ export function createStoreProvider(cacheDir: string, update: () => Promise<unkn
     }
     const current = inflight;
     let timer: NodeJS.Timeout | undefined;
-    const timedOut = await Promise.race([
-      current.then(() => false),
-      new Promise<boolean>((r) => {
-        timer = setTimeout(() => r(true), waitMs);
+    const TIMEOUT = Symbol("timeout");
+    const outcome = await Promise.race([
+      current,
+      new Promise<typeof TIMEOUT>((r) => {
+        timer = setTimeout(() => r(TIMEOUT), waitMs);
         timer.unref?.();
       }),
     ]);
     clearTimeout(timer);
-    if (timedOut) return "pending";
-    return (await tryOpen()) ?? "pending";
+    if (outcome === TIMEOUT) return "pending";
+    const opened = await tryOpen();
+    if (opened) return opened;
+    return typeof outcome === "string" ? { error: outcome } : "pending";
   };
 }
 
@@ -72,6 +83,7 @@ export function createServer(getStore: Provider, now: () => Date = () => new Dat
     async (args: A) => {
       const s = await getStore();
       if (s === "pending") return { content: [{ type: "text" as const, text: PENDING_MESSAGE }], isError: true };
+      if ("error" in s) return { content: [{ type: "text" as const, text: failureMessage(s.error) }], isError: true };
       return { content: [{ type: "text" as const, text: fn(s, args, now()) }] };
     };
 

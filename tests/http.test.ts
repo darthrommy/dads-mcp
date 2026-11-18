@@ -60,3 +60,13 @@ test("does not retry 404", async () => {
   expect((err as HttpError).status).toBe(404);
   expect(calls).toBe(1);
 });
+
+test("times out a hung request", async () => {
+  const http = createHttp({
+    retries: 0,
+    timeoutMs: 20,
+    fetchImpl: (_u, init) =>
+      new Promise((_, reject) => init?.signal?.addEventListener("abort", () => reject(init.signal!.reason))),
+  });
+  await expect(http.text("https://example.com/")).rejects.toThrow();
+});

@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { mkdir, open, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { buildCatalog, type NameOverrides } from "../catalog.js";
 import type { Http } from "../http.js";
@@ -39,8 +39,33 @@ function defaultOverrides(): NameOverrides {
   return JSON.parse(readFileSync(new URL("../../data/name-overrides.json", import.meta.url), "utf8")) as NameOverrides;
 }
 
+async function lockOwnerAlive(file: string): Promise<boolean> {
+  let text: string;
+  try {
+    text = await readFile(file, "utf8");
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw e;
+  }
+  const pid = Number(text.trim());
+  if (!Number.isInteger(pid) || pid <= 0) {
+    // 書き込み途中など PID が読めないときは、作られてからの時間で判断する
+    try {
+      return Date.now() - (await stat(file)).mtimeMs < LOCK_STALE_MS;
+    } catch {
+      return false;
+    }
+  }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
 async function acquireLock(file: string): Promise<void> {
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const h = await open(file, "wx");
       await h.writeFile(String(process.pid));
@@ -48,12 +73,50 @@ async function acquireLock(file: string): Promise<void> {
       return;
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
-      const age = Date.now() - (await stat(file)).mtimeMs;
-      if (age < LOCK_STALE_MS) throw new UpdateInProgressError();
+      if (await lockOwnerAlive(file)) throw new UpdateInProgressError();
       await rm(file, { force: true });
     }
   }
   throw new UpdateInProgressError();
+}
+
+async function releaseLock(file: string): Promise<void> {
+  try {
+    if ((await readFile(file, "utf8")).trim() === String(process.pid)) await rm(file, { force: true });
+  } catch {
+    // 既に消えていれば何もしない
+  }
+}
+
+export interface SwapOps {
+  rename: (from: string, to: string) => Promise<void>;
+  rm: (target: string, opts: { recursive: boolean; force: boolean }) => Promise<void>;
+}
+
+/** staging を current に入れ替える。失敗したら元の current を戻す */
+export async function swapIn(cacheDir: string, staging: string, stamp: string, ops: SwapOps = { rename, rm }): Promise<void> {
+  const current = path.join(cacheDir, CURRENT);
+  const old = path.join(cacheDir, `old-${stamp}`);
+  let hadCurrent = true;
+  try {
+    await ops.rename(current, old);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+    hadCurrent = false;
+  }
+  try {
+    await ops.rename(staging, current);
+  } catch (e) {
+    if (hadCurrent) await ops.rename(old, current);
+    throw e;
+  }
+  if (hadCurrent) {
+    try {
+      await ops.rm(old, { recursive: true, force: true });
+    } catch {
+      // 古いスナップショットが消せなくても、入れ替え自体は成功している
+    }
+  }
 }
 
 const reason = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -138,22 +201,12 @@ export async function runUpdate(deps: UpdateDeps): Promise<Manifest> {
     };
     await writeText(path.join(staging, FILES.manifest), JSON.stringify(manifest, null, 2));
 
-    const current = path.join(cacheDir, CURRENT);
-    const old = path.join(cacheDir, `old-${stamp}`);
-    let hadCurrent = true;
-    try {
-      await rename(current, old);
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
-      hadCurrent = false;
-    }
-    await rename(staging, current);
-    if (hadCurrent) await rm(old, { recursive: true, force: true });
+    await swapIn(cacheDir, staging, stamp);
     return manifest;
   } catch (e) {
     await rm(staging, { recursive: true, force: true });
     throw e;
   } finally {
-    await rm(lock, { force: true });
+    await releaseLock(lock);
   }
 }

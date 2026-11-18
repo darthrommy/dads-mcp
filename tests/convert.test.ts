@@ -47,3 +47,15 @@ test("convertPage(foundation) renders GFM table", () => {
   expect(doc.markdown).toMatch(/\| 架空ブルー \| #0017c1 \|/);
   expect(doc.resourceLinks).toEqual({});
 });
+
+test("throws when page has no main element", () => {
+  expect(() => convertPage("<html><head><title>X｜デジタル庁デザインシステムβ版</title></head><body><div id=app></div></body></html>", "https://design.digital.go.jp/dads/x/")).toThrow();
+});
+
+test("throws when converted body is empty", () => {
+  expect(() => convertPage("<html><head><title>X｜デジタル庁デザインシステムβ版</title></head><body><main><div class=\"dads-main__body\"><div class=\"prose\"></div></div></main></body></html>", "https://design.digital.go.jp/dads/x/")).toThrow();
+});
+
+test("throws when title is empty", () => {
+  expect(() => convertPage("<html><body><main><p>本文</p></main></body></html>", "https://design.digital.go.jp/dads/x/")).toThrow();
+});

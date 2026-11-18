@@ -24,8 +24,10 @@ export function convertPage(html: string, url: string): PageDoc {
   const title = $("title").first().text().replace(TITLE_SUFFIX, "").trim();
   const updated = $("main time[datetime]").first().attr("datetime")?.trim() || undefined;
 
+  if (!title) throw new Error("ページタイトルがありません");
   let body = $("main .dads-main__body .prose").first();
   if (body.length === 0) body = $("main").first();
+  if (body.length === 0) throw new Error("本文（<main>）が見つかりません");
 
   const resourceLinks: PageDoc["resourceLinks"] = {};
   body.find("h2").each((_, h) => {
@@ -49,6 +51,7 @@ export function convertPage(html: string, url: string): PageDoc {
   });
 
   const content = turndown.turndown(body.html() ?? "").trim();
+  if (!content) throw new Error("本文が空です");
   return {
     path: urlToPath(url),
     url,

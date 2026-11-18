@@ -4,7 +4,8 @@ import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { expect, test } from "vitest";
-import { createServer, createStoreProvider, PENDING_MESSAGE } from "../src/server.js";
+import { createServer, createStoreProvider, FIRST_FETCH_WAIT_MS, PENDING_MESSAGE } from "../src/server.js";
+import { UPDATE_COMMAND } from "../src/version.js";
 import { SnapshotStore } from "../src/snapshot/store.js";
 import { writeFixtureSnapshot } from "./fixtures/snapshot.js";
 
@@ -80,7 +81,7 @@ test("retries update after failure", async () => {
     },
     1000,
   );
-  expect(await provider()).toBe("pending");
+  expect(await provider()).toEqual({ error: "offline" });
   expect(await provider()).toBeInstanceOf(SnapshotStore);
   expect(calls).toBe(2);
 });
@@ -95,4 +96,18 @@ test("reloads after an external update", async () => {
   await writeFixtureSnapshot(dir, { fetchedAt: "2026-11-18T00:00:00.000Z" });
   const second = (await provider()) as SnapshotStore;
   expect(second.manifest.fetchedAt).toBe("2026-11-18T00:00:00.000Z");
+});
+
+test("reports fetch failure instead of pending", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "dads-srv-"));
+  const provider = createStoreProvider(dir, async () => { throw new Error("fetch failed"); }, 1000);
+  const client = await connect(provider);
+  const r = await client.callTool({ name: "list_components", arguments: {} });
+  expect(r.isError).toBe(true);
+  expect(textOf(r)).toContain("データ取得に失敗しました: fetch failed");
+  expect(textOf(r)).toContain(UPDATE_COMMAND);
+});
+
+test("first fetch wait stays under common 60s client timeouts", () => {
+  expect(FIRST_FETCH_WAIT_MS).toBeLessThan(60_000);
 });

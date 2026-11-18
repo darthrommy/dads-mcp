@@ -21,6 +21,7 @@ export interface HttpOptions {
   concurrency?: number;
   retries?: number;
   retryDelayMs?: number;
+  timeoutMs?: number;
 }
 
 function semaphore(limit: number) {
@@ -42,6 +43,7 @@ export function createHttp(opts: HttpOptions = {}): Http {
   const fetchImpl = opts.fetchImpl ?? fetch;
   const retries = opts.retries ?? 2;
   const delay = opts.retryDelayMs ?? 500;
+  const timeoutMs = opts.timeoutMs ?? 30_000;
   const run = semaphore(opts.concurrency ?? 4);
 
   async function request(url: string, headers: Record<string, string> = {}): Promise<Response> {
@@ -49,7 +51,7 @@ export function createHttp(opts: HttpOptions = {}): Http {
       let res: Response | undefined;
       let error: unknown;
       try {
-        res = await run(() => fetchImpl(url, { headers: { "User-Agent": USER_AGENT, ...headers } }));
+        res = await run(() => fetchImpl(url, { headers: { "User-Agent": USER_AGENT, ...headers }, signal: AbortSignal.timeout(timeoutMs) }));
       } catch (e) {
         error = e;
       }
