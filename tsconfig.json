@@ -11,5 +11,6 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["src", "tests", "vitest.config.ts", "vitest.live.config.ts"]
+  "include": ["src", "tests", "vitest.config.ts", "vitest.live.config.ts"],
+  "exclude": ["tests/fixtures/repos"]
 }
