@@ -27,15 +27,19 @@ Node.js 22 以上が必要です。
 Claude Code:
 
 ```sh
-claude mcp add dads -- npx -y github:darthrommy/dads-mcp
+claude mcp add --scope user dads -- npx -y --allow-git=root github:darthrommy/dads-mcp
 ```
+
+`--scope user` を付けると、すべてのプロジェクトで使えるようになります。付けない場合は、コマンドを実行したプロジェクトだけで使えます。
+
+`--allow-git=root` は npm 12 以上で必要です。npm 12 から GitHub などの git からの取得が既定で禁止になり、付けないと `EALLOWGIT` で取得に失敗してサーバーが起動しません。npm 11 以下では使われない設定として警告が出るだけで、そのまま動きます。
 
 Claude Desktop（`claude_desktop_config.json`）:
 
 ```json
 {
   "mcpServers": {
-    "dads": { "command": "npx", "args": ["-y", "github:darthrommy/dads-mcp"] }
+    "dads": { "command": "npx", "args": ["-y", "--allow-git=root", "github:darthrommy/dads-mcp"] }
   }
 }
 ```
@@ -49,8 +53,8 @@ Claude Desktop（`claude_desktop_config.json`）:
 ### データの更新と確認
 
 ```sh
-npx -y github:darthrommy/dads-mcp update   # 最新のデータを取得
-npx -y github:darthrommy/dads-mcp status   # 保存場所・取得日時・件数を表示
+npx -y --allow-git=root github:darthrommy/dads-mcp update   # 最新のデータを取得
+npx -y --allow-git=root github:darthrommy/dads-mcp status   # 保存場所・取得日時・件数を表示
 ```
 
 自動では更新しません。取得から 30 日たつと、ツールの返答に更新を勧める一文が付きます。

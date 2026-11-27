@@ -5,4 +5,4 @@ const pkg = createRequire(import.meta.url)("../package.json") as { version: stri
 export const VERSION: string = pkg.version;
 export const REPO_URL = "https://github.com/darthrommy/dads-mcp";
 export const USER_AGENT = `dads-mcp/${VERSION} (+${REPO_URL})`;
-export const UPDATE_COMMAND = "npx -y github:darthrommy/dads-mcp update";
+export const UPDATE_COMMAND = "npx -y --allow-git=root github:darthrommy/dads-mcp update";
