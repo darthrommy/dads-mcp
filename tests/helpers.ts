@@ -15,6 +15,7 @@ export async function makeRepoTarball(kind: RepoKind): Promise<Buffer> {
   const dir = mkdtempSync(path.join(os.tmpdir(), "dads-tgz-"));
   const root = `${REPOS[kind]}-main`;
   cpSync(new URL(`./fixtures/repos/${kind}`, import.meta.url), path.join(dir, root, "src", "components"), { recursive: true });
+  if (kind === "html") cpSync(new URL("./fixtures/repos-shared/html/global.css", import.meta.url), path.join(dir, root, "src", "global.css"));
   return pack(dir, root);
 }
 

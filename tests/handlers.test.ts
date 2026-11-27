@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { beforeAll, expect, test } from "vitest";
 import { SnapshotStore } from "../src/snapshot/store.js";
-import { getComponent, getFoundation, getPage, getTokens, listComponents, listFoundations, search } from "../src/tools/handlers.js";
+import { getComponent, getFoundation, getPage, getSetup, getTokens, listComponents, listFoundations, search } from "../src/tools/handlers.js";
 import { UPDATE_COMMAND } from "../src/version.js";
 import { writeFixtureSnapshot } from "./fixtures/snapshot.js";
 
@@ -114,4 +114,138 @@ test("getPage accepts url and path forms", () => {
     expect(getPage(store, { path: p }, now)).toContain("架空の余白の本文です。");
   }
   expect(getPage(store, { path: "foundations/spacin" }, now)).toContain("foundations/spacing");
+});
+
+const SHA = "abc1234def5678abc1234def5678abc1234def56";
+const htmlUrl = (file: string) => `https://github.com/digital-go-jp/design-system-example-components-html/blob/${SHA}/src/components/button/${file}`;
+const sourcesOf = (s: string) => s.split("\n\n---\n")[1];
+
+test("html part returns the representative example body and lists the others", () => {
+  const out = getComponent(store, { name: "button" }, now);
+  const body = bodyOf(out);
+  expect(body).toContain("### playground.html");
+  expect(body).toContain('<button class="dads-button">架空</button>');
+  expect(body).not.toContain("<!DOCTYPE");
+  expect(body).not.toContain('<link rel="stylesheet"');
+  expect(body).not.toContain("架空のリンク");
+  expect(body).not.toContain("架空の行");
+  expect(body).toContain("with-link.html: リンク付き（架空）");
+  expect(body).toContain('example: "with-link"');
+  expect(sourcesOf(out)).toContain(htmlUrl("playground.html"));
+  expect(sourcesOf(out)).not.toContain(htmlUrl("with-link.html"));
+  expect(sourcesOf(out)).not.toContain(htmlUrl("huge.html"));
+});
+
+test("dependency list is shown whatever parts are requested", () => {
+  const body = bodyOf(getComponent(store, { name: "button", parts: ["css"] }, now));
+  expect(body).toContain("## 読み込むファイル");
+  expect(body).toContain("https://fonts.googleapis.com/css2?family=Fake+Sans&display=swap");
+  expect(body).toContain("global.css");
+  expect(body).toContain("get_setup");
+  expect(body).toContain('get_component("breadcrumb", parts: ["css"])');
+  expect(body).toContain("button.js");
+  expect(body).toMatch(/breadcrumbs\.css.*with-link\.html/);
+  expect(body.indexOf("## 読み込むファイル")).toBeLessThan(body.indexOf("## CSS"));
+});
+
+test("example picks one example", () => {
+  for (const example of ["with-link", "with-link.html"]) {
+    const out = getComponent(store, { name: "button", example }, now);
+    const body = bodyOf(out);
+    expect(body).toContain('<a class="dads-button" href="#">架空のリンク</a>');
+    expect(body).toContain('<script type="module" src="button.js"></script>');
+    expect(body).not.toContain('<button class="dads-button">架空</button>');
+    expect(body).not.toContain("## 概要");
+    expect(sourcesOf(out)).toContain(htmlUrl("with-link.html"));
+  }
+  const missing = getComponent(store, { name: "button", example: "with-lnk" }, now);
+  expect(missing).toContain("見つかりませんでした");
+  expect(missing).toContain("with-link");
+});
+
+test("example all omits whole files that do not fit and says how to get them", () => {
+  const out = getComponent(store, { name: "button", parts: ["html"], example: "all" }, now);
+  const body = bodyOf(out);
+  expect(body.length).toBeLessThanOrEqual(20000);
+  expect(body).not.toContain("文字で切りました");
+  expect(body).toContain("架空のリンク");
+  expect(body).not.toContain("架空の行");
+  expect(body).toContain("## 省いた内容");
+  expect(body).toContain('get_component("button", parts: ["html"], example: "huge")');
+  expect(sourcesOf(out)).toContain(htmlUrl("with-link.html"));
+  expect(sourcesOf(out)).not.toContain(htmlUrl("huge.html"));
+});
+
+test("a single oversized example is cut at a line boundary with its local path", () => {
+  const out = getComponent(store, { name: "button", example: "huge" }, now);
+  const body = bodyOf(out);
+  expect(body.length).toBeLessThanOrEqual(20000);
+  expect(body).toContain("<span>架空の行 1</span>");
+  const code = body.split("```html\n")[1].split("\n```")[0];
+  for (const line of code.split("\n").filter(Boolean)) expect(line).toMatch(/^<span>架空の行 \d+<\/span>$/);
+  expect(body).toContain(`<span>架空の行 ${code.split("\n").filter(Boolean).length}</span>`);
+  expect(body).toContain(store.localPath("html", "button", "huge.html"));
+  expect(sourcesOf(out)).toContain(htmlUrl("huge.html"));
+});
+
+test("file returns a single file", () => {
+  const out = getComponent(store, { name: "button", file: "button.js" }, now);
+  expect(bodyOf(out)).toContain("架空のスクリプト");
+  expect(bodyOf(out)).not.toContain("## 概要");
+  expect(getComponent(store, { name: "button", file: "nope.css" }, now)).toContain("button.css");
+});
+
+test("js and spec parts", () => {
+  expect(getComponent(store, { name: "button", parts: ["js"] }, now)).toContain("```js\n// 架空のスクリプト");
+  const spec = bodyOf(getComponent(store, { name: "button", parts: ["spec"] }, now));
+  expect(spec).toContain("| data-size | lg, sm |");
+  expect(spec).toContain("dads-button");
+  expect(spec).toContain("__label");
+});
+
+test("react part falls back to stories when there is no component file", () => {
+  const card = bodyOf(getComponent(store, { name: "card", parts: ["react"] }, now));
+  expect(card).toContain("### Card.stories.tsx");
+  expect(card).toContain("架空のカード");
+  expect(card).toContain("Storybook");
+  expect(card).not.toContain("### index.ts");
+  const button = bodyOf(getComponent(store, { name: "button", parts: ["react"] }, now));
+  expect(button).not.toContain("Button.stories.tsx");
+  expect(button).toContain("### Button.tsx");
+});
+
+test("resolves each part of a name split by ／", () => {
+  for (const name of ["テーブル", "データテーブル", "テーブル／データテーブル"]) {
+    expect(getComponent(store, { name }, now)).toContain("テーブルは架空です。");
+  }
+});
+
+test("getSetup gives load order, the token gap and global.css without :root", () => {
+  const out = getSetup(store, {}, now);
+  const body = bodyOf(out);
+  expect(body).toContain("https://fonts.googleapis.com/css2?family=Fake+Sans&display=swap");
+  const tokensAt = body.indexOf("design-tokens@2.1.0/dist/tokens.css");
+  expect(tokensAt).toBeGreaterThan(0);
+  expect(tokensAt).toBeLessThan(body.indexOf('href="global.css"'));
+  expect(body).toContain("--border-radius-*");
+  expect(body).toContain(".dads-u-visually-hidden");
+  expect(body).not.toContain("--color-primitive-blue-50: #e8f1fe");
+  expect(body).toContain("full: true");
+  expect(sourcesOf(out)).toContain("https://github.com/digital-go-jp/design-system-example-components-html/blob/abc1234def5678abc1234def5678abc1234def56/src/global.css");
+  expect(sourcesOf(out)).toContain("@digital-go-jp/design-tokens v2.1.0");
+  expect(getSetup(store, { full: true }, now)).toContain("--color-primitive-blue-50: #e8f1fe");
+});
+
+test("getTokens explains what global.css lacks", () => {
+  const out = getTokens(store, {}, now);
+  expect(out).toContain("global.css");
+  expect(out).toContain("--border-radius-*");
+  expect(out).toContain("get_setup");
+});
+
+test("search covers repository docs and labels kinds", () => {
+  const out = search(store, { query: "aria-pressed" }, now);
+  expect(out).toContain("HTML版ドキュメント");
+  expect(out).toContain(htmlUrl("button.md"));
+  expect(search(store, { query: "無効" }, now)).toContain("ガイドライン");
 });

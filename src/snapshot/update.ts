@@ -3,13 +3,13 @@ import { mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/prom
 import path from "node:path";
 import { buildCatalog, type NameOverrides } from "../catalog.js";
 import type { Http } from "../http.js";
-import { fetchRepo } from "../repos/github.js";
-import { buildSearchIndex } from "../search.js";
+import { fetchRepo, missingSharedWarnings } from "../repos/github.js";
+import { buildSearchIndex, repoSearchDocs } from "../search.js";
 import { convertPage } from "../site/convert.js";
 import { filterPageUrls, parseSitemapLocs, SITE_BASE } from "../site/sitemap.js";
 import { fetchTokens } from "../tokens/fetch.js";
 import { type Manifest, type PageDoc, type RepoSnapshot, SCHEMA_VERSION } from "../types.js";
-import { CURRENT, FILES, LOCK_FILE, pageFile, repoDir, serializePage } from "./layout.js";
+import { CURRENT, FILES, LOCK_FILE, pageFile, repoDir, serializePage, sharedDir } from "./layout.js";
 
 export class UpdateInProgressError extends Error {
   constructor() {
@@ -178,19 +178,20 @@ export async function runUpdate(deps: UpdateDeps): Promise<Manifest> {
     }
 
     const catalog = buildCatalog(pages, html.components, react.components, deps.overrides ?? defaultOverrides());
-    warnings.push(...catalog.warnings);
+    warnings.push(...catalog.warnings, ...missingSharedWarnings(html), ...missingSharedWarnings(react));
 
     for (const p of pages) await writeText(pageFile(staging, p.path), serializePage(p, fetchedAt));
     for (const repo of [html, react]) {
       for (const c of repo.components) {
         for (const f of c.files) await writeText(path.join(repoDir(staging, repo.kind), c.dir, ...f.path.split("/")), f.content);
       }
+      for (const f of repo.shared) await writeText(path.join(sharedDir(staging, repo.kind), ...f.path.split("/")), f.content);
     }
     await writeText(path.join(staging, FILES.tokensCss), tokens.css);
     await writeText(path.join(staging, FILES.tokensSimpleCss), tokens.simpleCss);
     await writeText(path.join(staging, FILES.tokensJson), JSON.stringify(tokens.json));
     await writeText(path.join(staging, FILES.components), JSON.stringify(catalog.components, null, 2));
-    await writeText(path.join(staging, FILES.search), JSON.stringify(buildSearchIndex(pages)));
+    await writeText(path.join(staging, FILES.search), JSON.stringify(buildSearchIndex(pages, repoSearchDocs([html, react], catalog.components))));
 
     const manifest: Manifest = {
       schemaVersion: SCHEMA_VERSION,

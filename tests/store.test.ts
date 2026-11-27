@@ -15,9 +15,19 @@ test("opens fixture snapshot", async () => {
   expect(s.manifest.tokensVersion).toBe("2.1.0");
   expect(s.getPage("components/button")?.title).toBe("ボタン（概要）");
   expect(s.listPages("foundations/").map((p) => p.path)).toEqual(["foundations/color", "foundations/color/color-palette", "foundations/spacing"]);
-  expect(s.components.map((c) => c.slug)).toEqual(["breadcrumb", "button"]);
+  expect(s.components.map((c) => c.slug)).toEqual(["breadcrumb", "button", "card", "table"]);
   expect(s.repos.react.sha).toBe(SNAPSHOT_SHA);
-  expect(s.repos.html.components.find((c) => c.dir === "button")?.files.map((f) => f.path)).toEqual(["button.css", "button.md", "playground.html"]);
+  expect(s.repos.html.components.find((c) => c.dir === "button")?.files.map((f) => f.path)).toEqual([
+    "button.css",
+    "button.js",
+    "button.md",
+    "huge.html",
+    "playground.html",
+    "with-link.html",
+  ]);
+  expect(s.repos.html.shared.map((f) => f.path)).toEqual(["global.css"]);
+  expect(s.repos.react.shared).toEqual([]);
+  expect(s.localPath("html", "button", "button.css")).toBe(path.join(dir, CURRENT, "repos", "html", "button", "button.css"));
   expect(s.tokens.css).toContain("--color-primitive-blue-50");
   expect(s.search.sections.length).toBeGreaterThan(0);
 });
@@ -31,7 +41,7 @@ test("treats mismatched schema or corrupt cache as absent", async () => {
   const a = tmp();
   await writeFixtureSnapshot(a);
   const mf = path.join(a, CURRENT, FILES.manifest);
-  writeFileSync(mf, JSON.stringify({ ...JSON.parse(readFileSync(mf, "utf8")), schemaVersion: 2 }));
+  writeFileSync(mf, JSON.stringify({ ...JSON.parse(readFileSync(mf, "utf8")), schemaVersion: 1 }));
   expect(await SnapshotStore.open(a)).toBeNull();
 
   const b = tmp();

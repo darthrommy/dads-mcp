@@ -13,11 +13,12 @@ An unofficial MCP server for the [Digital Agency Design System (DADS)](https://d
 | ツール | 内容 |
 | --- | --- |
 | `list_components` | コンポーネントの一覧 |
-| `get_component` | 1 つのコンポーネントの説明（概要・使い方・アクセシビリティ）と HTML / CSS / React のコード |
+| `get_component` | 1 つのコンポーネントの説明（概要・使い方・アクセシビリティ）と HTML / CSS / JavaScript / React のコード、作例が読み込むファイルの一覧、CSS から抜き出した属性とクラスの一覧（`parts: ["spec"]`）。HTML は代表の作例 1 つを返し、ほかの作例は `example` で 1 つずつ取れる |
+| `get_setup` | HTML 版を使うための共通の土台。フォント・tokens.css・global.css の読み込み順、global.css と tokens.css の変数の違い、global.css の本文 |
 | `list_foundations` | 基本ルール（色・文字・余白・レイアウトなど）の項目一覧 |
 | `get_foundation` | 基本ルールの本文 |
 | `get_tokens` | デザイントークン（色・文字・角丸・影）の CSS 変数か JSON と、読み込み方法 |
-| `search` | ガイドライン全体のキーワード検索 |
+| `search` | ガイドラインと、HTML 版・React 版のドキュメント（.md）のキーワード検索 |
 | `get_page` | 上以外の任意のページの本文 |
 
 ## 使い方
@@ -58,6 +59,8 @@ npx -y --allow-git=root github:darthrommy/dads-mcp status   # 保存場所・取
 ```
 
 自動では更新しません。取得から 30 日たつと、ツールの返答に更新を勧める一文が付きます。
+
+返答は 1 回 20000 文字までです。収まらないファイルは省き、返答の末尾に、それを取る呼び出し方とキャッシュ内の場所を書きます。
 
 ### 頼み方の例
 

@@ -26,7 +26,8 @@ test("stdio server answers tools", async () => {
   const client = new Client({ name: "e2e", version: "0.0.0" });
   await client.connect(transport);
   const { tools } = await client.listTools();
-  expect(tools).toHaveLength(7);
+  expect(tools).toHaveLength(8);
+  expect(tools.map((t) => t.name)).toContain("get_setup");
   const r = await client.callTool({ name: "list_components", arguments: {} });
   expect((r.content as { text: string }[])[0].text).toContain("| button |");
   await client.close();
@@ -35,7 +36,7 @@ test("stdio server answers tools", async () => {
 test("status prints counts", () => {
   const out = execFileSync(process.execPath, [cli, "status"], { env: { ...process.env, DADS_MCP_CACHE_DIR: cacheDir }, encoding: "utf8" });
   expect(out).toContain(cacheDir);
-  expect(out).toMatch(/ページ 9 件/);
+  expect(out).toMatch(/ページ 10 件/);
 });
 
 test("unknown command exits 1", () => {

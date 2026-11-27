@@ -18,11 +18,11 @@ async function connect(getStore: Parameters<typeof createServer>[0]) {
 }
 const textOf = (r: unknown) => ((r as { content: { text: string }[] }).content[0]?.text ?? "");
 
-test("lists seven tools", async () => {
+test("lists eight tools", async () => {
   const client = await connect(async () => "pending");
   const { tools } = await client.listTools();
   expect(tools.map((t) => t.name).sort()).toEqual(
-    ["get_component", "get_foundation", "get_page", "get_tokens", "list_components", "list_foundations", "search"].sort(),
+    ["get_component", "get_foundation", "get_page", "get_setup", "get_tokens", "list_components", "list_foundations", "search"].sort(),
   );
   expect(tools.every((t) => (t.description ?? "").length > 0)).toBe(true);
 });

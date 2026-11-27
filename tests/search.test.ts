@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { buildSearchIndex, searchIndex } from "../src/search.js";
+import { buildSearchIndex, repoSearchDocs, searchIndex } from "../src/search.js";
 import type { PageDoc } from "../src/types.js";
 
 const doc = (path: string, title: string, markdown: string): PageDoc => ({
@@ -50,6 +50,41 @@ test("empty query returns []", () => {
 
 test("single character term", () => {
   expect(searchIndex(index, "欄", 10).map((h) => h.title)).toEqual(["インプット（概要）", "インプット（概要）"]);
+});
+
+test("searches repository docs with their kind", () => {
+  const docs = repoSearchDocs(
+    [
+      {
+        kind: "html",
+        sha: "abc1234",
+        components: [
+          {
+            dir: "button",
+            files: [
+              { path: "button.md", content: "# 架空\n\n## 状態\n\naria-pressed の架空の説明。" },
+              { path: "button.css", content: "aria-pressed" },
+            ],
+          },
+        ],
+        shared: [],
+      },
+      { kind: "react", components: [{ dir: "Button", files: [{ path: "component-spec.md", content: "aria-pressed を React で使う架空の説明。" }] }], shared: [] },
+    ],
+    [{ slug: "button", nameJa: "ボタン", summary: "", htmlDir: "button", reactDir: "Button", pages: {} }],
+  );
+  const hits = searchIndex(buildSearchIndex(pages, docs), "aria-pressed", 10);
+  expect(hits.map((h) => [h.kind, h.title, h.heading, h.url])).toEqual([
+    ["html", "ボタン button/button.md", "状態", "https://github.com/digital-go-jp/design-system-example-components-html/blob/abc1234/src/components/button/button.md"],
+    [
+      "react",
+      "ボタン Button/component-spec.md",
+      "ボタン Button/component-spec.md",
+      "https://github.com/digital-go-jp/design-system-example-components-react/blob/main/src/components/Button/component-spec.md",
+    ],
+  ]);
+  expect(hits[0].ref).toEqual({ dir: "button", file: "button.md" });
+  expect(searchIndex(buildSearchIndex(pages, docs), "無効", 10).every((h) => h.kind === "guide")).toBe(true);
 });
 
 test("index survives JSON round trip", () => {

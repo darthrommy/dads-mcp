@@ -1,0 +1,6 @@
+/* Test fixture (fictional) */
+:root {
+  --color-primitive-blue-50: #e8f1fe;
+}
+
+.dads-u-visually-hidden { position: absolute !important; }

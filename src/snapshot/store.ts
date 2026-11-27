@@ -11,7 +11,7 @@ import {
   SCHEMA_VERSION,
   type TokenSnapshot,
 } from "../types.js";
-import { CURRENT, FILES, parsePage, repoDir } from "./layout.js";
+import { CURRENT, FILES, parsePage, repoDir, sharedDir } from "./layout.js";
 
 async function listFiles(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { recursive: true, withFileTypes: true });
@@ -21,27 +21,37 @@ async function listFiles(dir: string): Promise<string[]> {
     .sort();
 }
 
+async function listFilesIfAny(dir: string): Promise<string[]> {
+  try {
+    return await listFiles(dir);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+    return [];
+  }
+}
+
 async function readRepo(root: string, kind: RepoKind, sha?: string): Promise<RepoSnapshot> {
   const base = repoDir(root, kind);
   const byDir = new Map<string, RepoComponent>();
-  let files: string[] = [];
-  try {
-    files = await listFiles(base);
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
-  }
+  const files = await listFilesIfAny(base);
   for (const rel of files) {
     const [dir, ...rest] = rel.split("/");
     if (!byDir.has(dir)) byDir.set(dir, { dir, files: [] });
     byDir.get(dir)!.files.push({ path: rest.join("/"), content: await readFile(path.join(base, rel), "utf8") });
   }
-  return { kind, sha, components: [...byDir.values()] };
+  const sharedBase = sharedDir(root, kind);
+  const shared = await Promise.all(
+    (await listFilesIfAny(sharedBase)).map(async (rel) => ({ path: rel, content: await readFile(path.join(sharedBase, rel), "utf8") })),
+  );
+  return { kind, sha, components: [...byDir.values()], shared };
 }
 
 export class SnapshotStore {
   private readonly pages: Map<string, PageDoc>;
 
   private constructor(
+    /** <cacheDir>/current */
+    readonly root: string,
     readonly manifest: Manifest,
     readonly components: ComponentEntry[],
     readonly tokens: TokenSnapshot,
@@ -89,11 +99,21 @@ export class SnapshotStore {
         html: await readRepo(root, "html", manifest.repos.html),
         react: await readRepo(root, "react", manifest.repos.react),
       };
-      return new SnapshotStore(manifest, components, tokens, search, repos, pages);
+      return new SnapshotStore(root, manifest, components, tokens, search, repos, pages);
     } catch (e) {
       console.error(`[dads-mcp] スナップショットが壊れているため取り直します: ${(e as Error).message}`);
       return null;
     }
+  }
+
+  /** キャッシュ内のファイルの絶対パス */
+  localPath(kind: RepoKind, dir: string, file: string): string {
+    return path.join(repoDir(this.root, kind), dir, ...file.split("/"));
+  }
+
+  /** RepoSnapshot.shared のファイルのキャッシュ内の絶対パス */
+  sharedPath(kind: RepoKind, file: string): string {
+    return path.join(sharedDir(this.root, kind), ...file.split("/"));
   }
 
   getPage(p: string): PageDoc | undefined {

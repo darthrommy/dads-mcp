@@ -6,7 +6,7 @@ import { createHttp } from "../../src/http.js";
 import { filterPageUrls, parseSitemapLocs, SITE_BASE } from "../../src/site/sitemap.js";
 import { SnapshotStore } from "../../src/snapshot/store.js";
 import { runUpdate } from "../../src/snapshot/update.js";
-import { getComponent } from "../../src/tools/handlers.js";
+import { getComponent, getSetup, search } from "../../src/tools/handlers.js";
 import type { Manifest } from "../../src/types.js";
 
 const cacheDir = mkdtempSync(path.join(os.tmpdir(), "dads-live-"));
@@ -35,6 +35,26 @@ test("button has guideline, html and react", () => {
   expect(out).toContain("dads-button");
   expect(out).toContain("```tsx");
   expect(out).not.toContain("（overview はありません）");
+});
+
+test("no component answer is cut in the middle by the character limit", () => {
+  const cut = store.components.filter((c) => getComponent(store, { name: c.slug }, new Date()).includes("文字で切りました"));
+  expect(cut.map((c) => c.slug)).toEqual([]);
+});
+
+test("example heads are stripped and global.css is available", () => {
+  const out = getComponent(store, { name: "button", parts: ["html"] }, new Date());
+  expect(out).toContain("## 読み込むファイル");
+  expect(out).toContain("global.css");
+  expect(out.split("\n\n---\n")[0]).not.toContain("<!DOCTYPE");
+  const setup = getSetup(store, {}, new Date());
+  expect(setup).toContain(".dads-u-visually-hidden");
+  expect(setup).toContain("--border-radius-*");
+  expect(manifest.warnings.filter((w) => w.includes("global.css"))).toEqual([]);
+});
+
+test("search covers repository docs", () => {
+  expect(search(store, { query: "aria" }, new Date())).toContain("HTML版ドキュメント");
 });
 
 test("tokens match npm version", async () => {

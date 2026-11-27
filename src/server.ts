@@ -96,13 +96,32 @@ export function createServer(getStore: Provider, now: () => Date = () => new Dat
     "get_component",
     {
       description:
-        "コンポーネント 1 つのガイドライン（概要・使い方・アクセシビリティ）と HTML / CSS / React のコードを返します。name は英語の slug、日本語名、React のコンポーネント名のどれでも指定できます。",
+        "コンポーネント 1 つのガイドライン（概要・使い方・アクセシビリティ）と HTML / CSS / JavaScript / React のコードを返します。冒頭に、HTML 版の作例が読み込むファイルの一覧が付きます。html は代表の作例 1 つと、ほかの作例の一覧を返します。name は英語の slug、日本語名、React のコンポーネント名のどれでも指定できます。",
       inputSchema: {
         name: z.string().describe("例: button、ボタン、Breadcrumbs"),
-        parts: z.array(z.enum(h.COMPONENT_PARTS)).optional().describe("返す部分。省略時は overview, usage, accessibility, html"),
+        parts: z
+          .array(z.enum(h.COMPONENT_PARTS))
+          .optional()
+          .describe("返す部分。省略時は overview, usage, accessibility, html。spec は CSS から抜き出した data-* 属性の値とクラスの一覧"),
+        example: z
+          .string()
+          .optional()
+          .describe("HTML 版の作例の名前（例: sortable-header）。指定するとその作例だけを返す。all ですべての作例"),
+        file: z.string().optional().describe("HTML 版か React 版のファイル名（例: table.css、Card.stories.tsx）。指定するとそのファイルだけを返す"),
       },
     },
     tool(h.getComponent),
+  );
+  server.registerTool(
+    "get_setup",
+    {
+      description:
+        "HTML 版コンポーネントを使うための共通の土台を返します。フォント・tokens.css・global.css の読み込み順、global.css と tokens.css にある変数の違い、global.css の本文（リセット、リンク、フォーカス、.dads-u- のユーティリティクラス）。",
+      inputSchema: {
+        full: z.boolean().optional().describe("true なら global.css を :root の変数も含めて全文返す。省略時は tokens.css と同じ :root を省く"),
+      },
+    },
+    tool(h.getSetup),
   );
   server.registerTool(
     "list_foundations",
@@ -134,7 +153,8 @@ export function createServer(getStore: Provider, now: () => Date = () => new Dat
   server.registerTool(
     "search",
     {
-      description: "ガイドライン全体をキーワードで検索し、該当するページと抜粋を返します。空白区切りで複数語を指定すると、すべてを含むものを返します。",
+      description:
+        "ガイドラインのページと、HTML 版・React 版のドキュメント（.md）をキーワードで検索し、該当する箇所と抜粋を返します。結果には種類（ガイドライン / HTML版ドキュメント / React版ドキュメント）が付きます。空白区切りで複数語を指定すると、すべてを含むものを返します。",
       inputSchema: {
         query: z.string().describe("検索語"),
         limit: z.number().int().min(1).max(50).optional().describe("最大件数。省略時は 10"),

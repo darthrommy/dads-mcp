@@ -1,6 +1,6 @@
 # dads-mcp
 
-デジタル庁デザインシステム（DADS）の非公式 MCP サーバー。ガイドラインサイト、example components の 2 リポジトリ、`@digital-go-jp/design-tokens` を取得してローカルのスナップショットにし、7 つのツールで返す。
+デジタル庁デザインシステム（DADS）の非公式 MCP サーバー。ガイドラインサイト、example components の 2 リポジトリ、`@digital-go-jp/design-tokens` を取得してローカルのスナップショットにし、8 つのツールで返す。
 
 ## コマンド
 
@@ -24,7 +24,8 @@
 
 - ページ一覧: `src/site/sitemap.ts`（`sitemap-index.xml` → `sitemap-0.xml`）
 - 本文の取り出しと Markdown 変換: `src/site/convert.ts`。本文の位置、タイトルの接尾辞、「各種リソース」の表から HTML / React のディレクトリ名を読む部分
-- example components の取得: `src/repos/github.ts`（含めるファイルと除くファイル）
+- example components の取得: `src/repos/github.ts`（含めるファイルと除くファイル、`src/global.css` のようなコンポーネント外の共通ファイル）
+- 作例 HTML の `<head>` と `<body>` の分け方、読み込むファイルの読み取り: `src/examples.ts`
 - トークン: `src/tokens/fetch.ts`
 - ガイドラインのページとリポジトリのディレクトリの対応: `src/catalog.ts`。自動で対応づけられないものは `data/name-overrides.json` に書く
 

@@ -6,6 +6,7 @@ import { expect, test } from "vitest";
 import { HttpError } from "../src/http.js";
 import { CURRENT, pageFile, parsePage, serializePage } from "../src/snapshot/layout.js";
 import { runUpdate, swapIn, UpdateAbortedError, UpdateInProgressError } from "../src/snapshot/update.js";
+import { SCHEMA_VERSION } from "../src/types.js";
 import { makeFakeHttp } from "./helpers.js";
 
 const tmp = () => mkdtempSync(path.join(os.tmpdir(), "dads-cache-"));
@@ -16,7 +17,7 @@ test("writes a complete snapshot", async () => {
   const m = await runUpdate({ cacheDir, http: await makeFakeHttp(), now: () => new Date("2026-11-18T00:00:00Z") });
   const disk = manifestOf(cacheDir);
   expect(disk).toEqual(m);
-  expect(m.schemaVersion).toBe(1);
+  expect(m.schemaVersion).toBe(SCHEMA_VERSION);
   expect(m.fetchedAt).toBe("2026-11-18T00:00:00.000Z");
   expect(m.counts.pages).toBe(5);
   expect(m.tokensVersion).toBe("2.1.0");
@@ -24,7 +25,12 @@ test("writes a complete snapshot", async () => {
   const page = parsePage(readFileSync(pageFile(path.join(cacheDir, CURRENT), "components/test-button"), "utf8"), "components/test-button");
   expect(page.title).toBe("テストボタン（概要）");
   expect(existsSync(path.join(cacheDir, CURRENT, "repos", "react", "TestButton", "TestButton.tsx"))).toBe(true);
+  expect(existsSync(path.join(cacheDir, CURRENT, "repos", "react", "TestButton", "TestButton.stories.tsx"))).toBe(true);
+  expect(readFileSync(path.join(cacheDir, CURRENT, "shared", "html", "global.css"), "utf8")).toContain(".dads-u-visually-hidden");
+  expect(m.warnings.some((w) => w.includes("global.css"))).toBe(false);
   expect(existsSync(path.join(cacheDir, CURRENT, "tokens", "tokens.css"))).toBe(true);
+  const index = JSON.parse(readFileSync(path.join(cacheDir, CURRENT, "search-index.json"), "utf8"));
+  expect(index.sections.some((x: { kind: string }) => x.kind === "html")).toBe(true);
   expect(existsSync(path.join(cacheDir, CURRENT, "search-index.json"))).toBe(true);
   const comps = JSON.parse(readFileSync(path.join(cacheDir, CURRENT, "components.json"), "utf8"));
   expect(comps[0]).toMatchObject({ slug: "test-button", htmlDir: "test-button", reactDir: "TestButton" });
@@ -58,7 +64,7 @@ test("rejects a second concurrent update via lock file", async () => {
   await new Promise((r) => setTimeout(r, 20));
   await expect(runUpdate({ cacheDir, http: await makeFakeHttp() })).rejects.toBeInstanceOf(UpdateInProgressError);
   release();
-  await expect(first).resolves.toMatchObject({ schemaVersion: 1 });
+  await expect(first).resolves.toMatchObject({ schemaVersion: SCHEMA_VERSION });
   expect(existsSync(path.join(cacheDir, "update.lock"))).toBe(false);
 });
 
@@ -88,7 +94,7 @@ test("removes lock left by a dead process", async () => {
   const cacheDir = tmp();
   const deadPid = spawnSync(process.execPath, ["-e", ""]).pid;
   writeFileSync(path.join(cacheDir, "update.lock"), String(deadPid));
-  await expect(runUpdate({ cacheDir, http: await makeFakeHttp() })).resolves.toMatchObject({ schemaVersion: 1 });
+  await expect(runUpdate({ cacheDir, http: await makeFakeHttp() })).resolves.toMatchObject({ schemaVersion: SCHEMA_VERSION });
   expect(existsSync(path.join(cacheDir, "update.lock"))).toBe(false);
 });
 

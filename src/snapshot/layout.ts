@@ -21,6 +21,11 @@ export function repoDir(root: string, kind: RepoKind): string {
   return path.join(root, "repos", kind);
 }
 
+/** RepoSnapshot.shared の置き場所 */
+export function sharedDir(root: string, kind: RepoKind): string {
+  return path.join(root, "shared", kind);
+}
+
 const KEYS = ["title", "url", "updated", "fetchedAt"] as const;
 
 export function serializePage(p: PageDoc, fetchedAt: string): string {

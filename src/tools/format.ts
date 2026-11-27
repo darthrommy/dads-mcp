@@ -1,11 +1,12 @@
 import { normalizeName } from "../catalog.js";
-import { githubFileUrl, REPOS } from "../repos/github.js";
+import { githubPathUrl, REPOS } from "../repos/github.js";
 import type { Manifest, RepoKind } from "../types.js";
 import { UPDATE_COMMAND } from "../version.js";
 
 export type Source =
   | { kind: "site"; title: string; url: string }
-  | { kind: "github"; repo: RepoKind; dir: string; file: string; sha?: string }
+  /** path はリポジトリのルートからの相対パス（"src/components/button/button.css"、"src/global.css"） */
+  | { kind: "github"; repo: RepoKind; path: string; sha?: string }
   | { kind: "tokens"; version: string };
 
 export const MAX_CHARS = 20000;
@@ -16,7 +17,7 @@ function sourceLine(s: Source): string {
     case "site":
       return `出典: 「${s.title}」（デジタル庁デザインシステム）${s.url} を dads-mcp が取得・整形`;
     case "github": {
-      const url = githubFileUrl(s.repo, s.dir, s.file, s.sha);
+      const url = githubPathUrl(s.repo, s.path, s.sha);
       return `出典: digital-go-jp/${REPOS[s.repo]}（MIT License）${url}${s.sha ? ` commit ${s.sha.slice(0, 7)}` : ""}`;
     }
     case "tokens":

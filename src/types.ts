@@ -30,6 +30,8 @@ export interface RepoSnapshot {
   kind: RepoKind;
   sha?: string;
   components: RepoComponent[];
+  /** src/components の外にある共通ファイル（HTML 版の src/global.css）。path は src/ からの相対パス */
+  shared: ComponentFile[];
 }
 
 export interface ComponentEntry {
@@ -50,7 +52,7 @@ export interface TokenSnapshot {
 }
 
 export interface Manifest {
-  schemaVersion: 1;
+  schemaVersion: number;
   /** ISO 8601 */
   fetchedAt: string;
   repos: { html?: string; react?: string };
@@ -59,4 +61,5 @@ export interface Manifest {
   warnings: string[];
 }
 
-export const SCHEMA_VERSION = 1;
+/** 2: shared/（global.css）、HTML 版の .js、React 版の .stories.tsx、検索索引のリポジトリ文書を追加 */
+export const SCHEMA_VERSION = 2;
