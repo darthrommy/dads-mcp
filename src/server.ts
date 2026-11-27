@@ -108,6 +108,12 @@ export function createServer(getStore: Provider, now: () => Date = () => new Dat
           .optional()
           .describe("HTML 版の作例の名前（例: sortable-header）。指定するとその作例だけを返す。all ですべての作例"),
         file: z.string().optional().describe("HTML 版か React 版のファイル名（例: table.css、Card.stories.tsx）。指定するとそのファイルだけを返す"),
+        from_line: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe("file か example（all 以外）と一緒に使う。その行から返す。返答が切れたときに案内される値を渡す"),
       },
     },
     tool(h.getComponent),

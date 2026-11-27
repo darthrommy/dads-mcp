@@ -249,3 +249,34 @@ test("search covers repository docs and labels kinds", () => {
   expect(out).toContain(htmlUrl("button.md"));
   expect(search(store, { query: "無効" }, now)).toContain("ガイドライン");
 });
+
+const codeOf = (s: string, lang: string) => bodyOf(s).split(`\`\`\`${lang}\n`)[1].split("\n```")[0].split("\n");
+
+test("a cut file tells how to continue with from_line", () => {
+  const raw = store.repos.html.components.find((c) => c.dir === "button")!.files.find((f) => f.path === "huge.html")!.content.split("\n");
+  const first = getComponent(store, { name: "button", file: "huge.html" }, now);
+  const next = Number(/get_component\("button", file: "huge\.html", from_line: (\d+)\)/.exec(bodyOf(first))![1]);
+  expect(codeOf(first, "html").length).toBe(next - 1);
+  const second = getComponent(store, { name: "button", file: "huge.html", from_line: next }, now);
+  expect(codeOf(second, "html")[0]).toBe(raw[next - 1]);
+  expect(bodyOf(second)).toContain(`${next} 行目から`);
+  expect(getComponent(store, { name: "button", file: "huge.html", from_line: 99999 }, now)).toContain("行目はありません");
+});
+
+test("a cut example tells how to continue with from_line", () => {
+  const first = getComponent(store, { name: "button", example: "huge" }, now);
+  const next = Number(/get_component\("button", example: "huge", from_line: (\d+)\)/.exec(bodyOf(first))![1]);
+  const second = getComponent(store, { name: "button", example: "huge", from_line: next }, now);
+  expect(codeOf(second, "html")[0]).toBe(`<span>架空の行 ${next}</span>`);
+});
+
+test("default answer mentions the other ways to call get_component", () => {
+  const body = bodyOf(getComponent(store, { name: "button" }, now));
+  for (const s of ['parts: ["spec"]', 'parts: ["js"]', "example:", "file:"]) expect(body).toContain(s);
+});
+
+test("search by file name points to the tool that returns the file", () => {
+  expect(search(store, { query: "global.css" }, now)).toContain("get_setup");
+  expect(search(store, { query: "global.css" }, now)).not.toContain("一致するページはありませんでした");
+  expect(search(store, { query: "button.css" }, now)).toContain('get_component("button", file: "button.css")');
+});

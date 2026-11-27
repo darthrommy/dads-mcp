@@ -89,6 +89,12 @@ interface Content {
   hint: string;
   /** キャッシュ内のファイル */
   local?: string;
+  /** body の 1 行目が元の何行目か（from_line で途中から返すとき） */
+  firstLine?: number;
+  /** 元の行数 */
+  totalLines?: number;
+  /** n 行目からの続きを取る呼び出し方 */
+  more?: (n: number) => string;
 }
 
 const fixed = (text: string): Item => ({ kind: "fixed", text });
@@ -101,8 +107,17 @@ function render(c: Content, body = c.body): string {
 /** 行の境目で room 文字に収まるように切る。1 行も入らなければ undefined */
 function cutToFit(c: Content, room: number): string | undefined {
   const lines = c.body.split("\n");
-  const note = (k: number) =>
-    `（文字数の上限のため、全 ${lines.length} 行のうち ${k} 行目までです。${c.local ? `全体はキャッシュの ${c.local} にあります。` : ""}）`;
+  const from = c.firstLine ?? 1;
+  const total = c.totalLines ?? lines.length + from - 1;
+  const note = (k: number) => {
+    const last = from + k - 1;
+    return (
+      `（文字数の上限のため、全 ${total} 行のうち ${from === 1 ? "" : `${from} 行目から`}${last} 行目までです。` +
+      (c.more ? `続きは \`${c.more(last + 1)}\` で取れます。` : "") +
+      (c.local ? `全体はキャッシュの ${c.local} にあります。` : "") +
+      "）"
+    );
+  };
   let size = render(c, "").length + 2 + note(lines.length).length;
   let k = 0;
   while (k < lines.length && size + lines[k].length + 1 <= room) size += lines[k++].length + 1;
@@ -203,9 +218,32 @@ function formatDeps(s: SnapshotStore, c: ComponentEntry, deps: CollectedDep[], t
 
 const exampleName = (file: string) => file.replace(/\.html$/, "");
 
+const CALL_GUIDE = [
+  "## ほかの取り方",
+  "",
+  '- `parts: ["css"]`、`parts: ["js"]`、`parts: ["react"]`: HTML 版の CSS・JavaScript、React 版のコード',
+  '- `parts: ["spec"]`: CSS から抜き出した data-* 属性の値とクラスの一覧',
+  '- `example: "名前"`: HTML 版の作例 1 つ（`"all"` ですべて）',
+  '- `file: "ファイル名"`: ファイル 1 つ。長くて切れたときは `from_line` で続きから取れます',
+].join("\n");
+
+/** from_line 行目からにする。範囲外なら理由の文を返す */
+function fromLine(c: Content, n: number | undefined): Content | string {
+  if (n === undefined || n === 1) return c;
+  const lines = c.body.split("\n");
+  if (!Number.isInteger(n) || n < 1 || n > lines.length) return `${n} 行目はありません（全 ${lines.length} 行）。`;
+  return {
+    ...c,
+    heading: `${c.heading ?? ""}（${n} 行目から）`,
+    body: lines.slice(n - 1).join("\n"),
+    firstLine: n,
+    totalLines: lines.length,
+  };
+}
+
 export function getComponent(
   s: SnapshotStore,
-  a: { name: string; parts?: ComponentPart[]; example?: string; file?: string },
+  a: { name: string; parts?: ComponentPart[]; example?: string; file?: string; from_line?: number },
   now: Date,
 ): string {
   const c = findComponent(s, a.name);
@@ -225,11 +263,16 @@ export function getComponent(
     label: kind === "react" ? `React 版 ${f.path}` : f.path,
     hint: `get_component(${quote(c.slug)}, file: ${quote(f.path)})`,
     local: s.localPath(kind, dir, f.path),
+    more: (n) => `get_component(${quote(c.slug)}, file: ${quote(f.path)}, from_line: ${n})`,
   });
   const done = (items: Item[]) => {
     const { body, sources } = assemble(items);
     return finalize(body, sources, s.manifest, now, "`parts` を絞って再実行してください。");
   };
+
+  const fail = (msg: string) => finalize(msg, [topSource(s)], s.manifest, now);
+  const single = !!a.example?.trim() && a.example.trim() !== "all";
+  if (a.from_line !== undefined && !a.file && !single) return fail("`from_line` は `file` か、`example`（all 以外）と一緒に指定してください。");
 
   if (a.file) {
     const want = a.file.trim();
@@ -241,7 +284,9 @@ export function getComponent(
     }
     const kind: RepoKind = html ? "html" : "react";
     const dir = (html ? c.htmlDir : c.reactDir)!;
-    return done([header, fileContent(kind, dir, (html ?? react)!, `## ${kind === "html" ? "HTML 版" : "React 版"} ${want}`)]);
+    const item = fromLine(fileContent(kind, dir, (html ?? react)!, `## ${kind === "html" ? "HTML 版" : "React 版"} ${want}`), a.from_line);
+    if (typeof item === "string") return fail(item);
+    return done([header, item]);
   }
 
   const parsed = htmlFiles.filter((f) => f.path.endsWith(".html")).map((f) => parseExample(c.htmlDir!, f.path, f.content));
@@ -259,7 +304,6 @@ export function getComponent(
       selected = [hit];
     }
   }
-  const single = !!ex && ex !== "all";
   const parts: ComponentPart[] = a.parts?.length ? [...new Set(a.parts)] : ex ? ["html"] : DEFAULT_PARTS;
   if (ex && !parts.includes("html")) parts.push("html");
 
@@ -289,16 +333,23 @@ export function getComponent(
       if (!single) for (const f of htmlFiles.filter((f) => f.path.endsWith(".md"))) items.push(fileContent("html", dir, f, `### ${f.path}`));
       if (selected.length) items.push(fixed(EXAMPLE_NOTE));
       for (const e of selected) {
-        items.push({
-          kind: "content",
-          heading: `### ${e.file}${e.title ? `: ${e.title}` : ""}`,
-          lang: "html",
-          body: e.snippet,
-          sources: [fileSource(s, "html", dir, e.file)],
-          label: e.file,
-          hint: `get_component(${quote(c.slug)}, parts: ["html"], example: ${quote(exampleName(e.file))})`,
-          local: s.localPath("html", dir, e.file),
-        });
+        const name = quote(exampleName(e.file));
+        const item = fromLine(
+          {
+            kind: "content",
+            heading: `### ${e.file}${e.title ? `: ${e.title}` : ""}`,
+            lang: "html",
+            body: e.snippet,
+            sources: [fileSource(s, "html", dir, e.file)],
+            label: e.file,
+            hint: `get_component(${quote(c.slug)}, parts: ["html"], example: ${name})`,
+            local: s.localPath("html", dir, e.file),
+            more: (n) => `get_component(${quote(c.slug)}, example: ${name}, from_line: ${n})`,
+          },
+          single ? a.from_line : undefined,
+        );
+        if (typeof item === "string") return fail(item);
+        items.push(item);
       }
       const others = ex ? [] : parsed.filter((p) => p !== rep);
       if (others.length) {
@@ -337,6 +388,7 @@ export function getComponent(
     }
     if (items.length === before) items.push(fixed(`（${part} はありません）`));
   }
+  if (!a.parts?.length && !ex) items.push(fixed(CALL_GUIDE));
   return done(items);
 }
 
@@ -501,13 +553,37 @@ export function getSetup(s: SnapshotStore, a: { full?: boolean }, now: Date): st
 
 const KIND_LABEL: Record<SearchKind, string> = { guide: "ガイドライン", html: "HTML版ドキュメント", react: "React版ドキュメント" };
 
+/** 検索語のどれかとファイル名が同じファイルと、それを返す呼び出し方 */
+function fileMatches(s: SnapshotStore, query: string): string[] {
+  const terms = new Set(query.normalize("NFKC").toLowerCase().split(/\s+/).filter((t) => t.includes(".")));
+  if (!terms.size) return [];
+  const out: string[] = [];
+  for (const f of s.repos.html.shared) {
+    if (terms.has(path.posix.basename(f.path).toLowerCase())) out.push(`${f.path}（HTML 版の共通ファイル）: \`get_setup()\``);
+  }
+  for (const kind of ["html", "react"] as const) {
+    for (const comp of s.repos[kind].components) {
+      const entry = s.components.find((c) => (kind === "html" ? c.htmlDir : c.reactDir) === comp.dir);
+      if (!entry) continue;
+      for (const f of comp.files) {
+        if (terms.has(path.posix.basename(f.path).toLowerCase())) {
+          out.push(`${comp.dir}/${f.path}（${kind === "html" ? "HTML 版" : "React 版"}）: \`get_component(${quote(entry.slug)}, file: ${quote(f.path)})\``);
+        }
+      }
+    }
+  }
+  return out;
+}
+
 export function search(s: SnapshotStore, a: { query: string; limit?: number }, now: Date): string {
   const limit = Math.min(Math.max(a.limit ?? 10, 1), 50);
   const hits = searchIndex(s.search, a.query, limit);
-  if (hits.length === 0) {
+  const files = fileMatches(s, a.query);
+  if (hits.length === 0 && files.length === 0) {
     return finalize(`「${a.query}」に一致するページはありませんでした。`, [topSource(s)], s.manifest, now);
   }
   const lines = [`# 「${a.query}」の検索結果（${hits.length} 件）`, ""];
+  if (files.length) lines.push("同じ名前のファイル:", "", ...files.map((f) => `- ${f}`), "");
   for (const h of hits) lines.push(`- [${h.title} / ${h.heading}](${h.url})（${KIND_LABEL[h.kind]}）`, `  ${h.snippet}`);
   const sources = hits.map((h): Source =>
     h.kind !== "guide" && h.ref ? fileSource(s, h.kind, h.ref.dir, h.ref.file) : { kind: "site", title: h.title, url: h.url },
